@@ -1,5 +1,17 @@
+# Node modules
 node_modules/
+**/node_modules/
+
+# dotenv
 .env
-build/
+
+# DB files
+*.db.json
+db.json
+
+# Vite output
 dist/
+
+# Logs
 *.log
+
