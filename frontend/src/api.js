@@ -1,5 +1,5 @@
 // Replace localhost and port if your backend runs elsewhere
-const API_BASE = 'http://localhost:4000/api'
+const API_BASE_URL = 'https://celestial-spin.onrender.com';
 
 export async function fetchBalance(userId) {
   const res = await fetch(`${API_BASE}/balance/${userId}`)
