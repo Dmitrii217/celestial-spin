@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import TokenDisplay from './components/TokenDisplay'
 import Milestones from './components/Milestones'
 import { fetchBalance } from './api'
@@ -23,10 +24,10 @@ const milestones = [
 ]
 
 function App() {
-  const [balance, setBalance] = useState(0)
+  const [searchParams] = useSearchParams()
+  const userId = searchParams.get('tgId') || '806916617' // fallback to default ID
 
-  // Your Telegram userId (hardcoded)
-  const userId = '806916617'
+  const [balance, setBalance] = useState(0)
 
   useEffect(() => {
     async function getData() {
@@ -39,10 +40,9 @@ function App() {
     }
     getData()
 
-    // Refresh every 30 seconds
-    const interval = setInterval(getData, 30000)
+    const interval = setInterval(getData, 30000) // refresh every 30 sec
     return () => clearInterval(interval)
-  }, [])
+  }, [userId])
 
   return (
     <div className="app">
@@ -57,4 +57,3 @@ function App() {
 }
 
 export default App
-
