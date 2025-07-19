@@ -29,21 +29,30 @@ const db = new Low(adapter);
       await db.write();
     }
 
+    const dashboardUrl = `https://celestial-spin.netlify.app/?id=${chatId}`;
+
     bot.sendMessage(chatId, `🌌 Welcome to Celestial Spin!
 
 Earn EARTH tokens every 4 hours by spinning the cosmic wheel.
 
 Track your token balance, next spin time, and milestones on the live dashboard.
 
-Use /spin to start spinning!`);
+Use /spin to start spinning!`, {
+      reply_markup: {
+        inline_keyboard: [[
+          { text: '📊 View Dashboard', url: dashboardUrl }
+        ]]
+      }
+    });
   });
 
   bot.onText(/\/spin/, async (msg) => {
     const chatId = msg.chat.id;
-    const user = db.data.users[chatId];
+    let user = db.data.users[chatId];
 
     if (!user) {
       db.data.users[chatId] = { tokens: 0, lastSpin: 0 };
+      user = db.data.users[chatId];
       await db.write();
     }
 
@@ -61,7 +70,15 @@ Use /spin to start spinning!`);
     user.lastSpin = now;
     await db.write();
 
-    bot.sendMessage(chatId, `🌀 You earned ${earned} EARTH tokens!`);
+    const dashboardUrl = `https://celestial-spin.netlify.app/?id=${chatId}`;
+
+    bot.sendMessage(chatId, `🌀 You earned ${earned} EARTH tokens!`, {
+      reply_markup: {
+        inline_keyboard: [[
+          { text: '📊 View Dashboard', url: dashboardUrl }
+        ]]
+      }
+    });
   });
 
   // Simple HTTP server to keep alive or add API endpoints
