@@ -29,7 +29,7 @@ const db = new Low(adapter);
       await db.write();
     }
 
-    const dashboardUrl = `https://celestial-spin.netlify.app/?id=${chatId}`;
+    const dashboardUrl = `https://celestial-dashboard.netlify.app/?id=${chatId}`;
 
     bot.sendMessage(chatId, `🌌 Welcome to Celestial Spin!
 
@@ -70,7 +70,7 @@ Use /spin to start spinning!`, {
     user.lastSpin = now;
     await db.write();
 
-    const dashboardUrl = `https://celestial-spin.netlify.app/?id=${chatId}`;
+    const dashboardUrl = `https://celestial-dashboard.netlify.app/?id=${chatId}`;
 
     bot.sendMessage(chatId, `🌀 You earned ${earned} EARTH tokens!`, {
       reply_markup: {
