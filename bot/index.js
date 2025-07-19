@@ -1,3 +1,4 @@
+import fetch from 'node-fetch';
 import express from 'express';
 import TelegramBot from 'node-telegram-bot-api';
 import { Low, JSONFile } from 'lowdb';
@@ -92,36 +93,37 @@ Track your tokens, cooldown, and milestones on the live dashboard.`);
     sendDashboardKeyboard(chatId);
   });
 
-  // ✅ /balance command
+  // ✅ UPDATED /balance command — fetches live data from backend API
   bot.onText(/\/balance/, async (msg) => {
     const chatId = msg.chat.id;
-    let user = db.data.users[chatId];
 
-    if (!user) {
-      db.data.users[chatId] = { tokens: 0, lastSpin: 0 };
-      user = db.data.users[chatId];
-      await db.write();
-    }
+    try {
+      const response = await fetch(`https://celestial-spin.onrender.com/api/balance/${chatId}`);
+      if (!response.ok) throw new Error('Failed to fetch balance');
+      const data = await response.json(); // Expected { userId, balance, cooldown }
 
-    const now = Date.now();
-    const cooldown = 4 * 60 * 60 * 1000;
-    const timeLeft = user.lastSpin + cooldown - now;
+      const now = Date.now();
+      const timeLeft = data.cooldown - now;
 
-    let cooldownText = '';
-    if (timeLeft > 0) {
-      const minutes = Math.floor((timeLeft / 1000 / 60) % 60);
-      const hours = Math.floor(timeLeft / 1000 / 60 / 60);
-      cooldownText = `🕒 Next spin in: ${hours}h ${minutes}m`;
-    } else {
-      cooldownText = `✅ You can spin now! Use /spin`;
-    }
+      let cooldownText = '';
+      if (timeLeft > 0) {
+        const minutes = Math.floor((timeLeft / 1000 / 60) % 60);
+        const hours = Math.floor(timeLeft / 1000 / 60 / 60);
+        cooldownText = `🕒 Next spin in: ${hours}h ${minutes}m`;
+      } else {
+        cooldownText = `✅ You can spin now! Use /spin`;
+      }
 
-    await bot.sendMessage(chatId, `🌍 Your EARTH token balance: *${user.tokens}*  
+      await bot.sendMessage(chatId, `🌍 Your EARTH token balance: *${data.balance}*  
 ${cooldownText}`, {
-      parse_mode: 'Markdown'
-    });
+        parse_mode: 'Markdown'
+      });
 
-    sendDashboardKeyboard(chatId);
+      sendDashboardKeyboard(chatId);
+    } catch (error) {
+      console.error('Error fetching balance from backend:', error);
+      await bot.sendMessage(chatId, '❌ Sorry, failed to fetch your balance. Please try again later.');
+    }
   });
 
   // ✅ Keep-alive endpoint for Render
