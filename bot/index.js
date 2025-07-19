@@ -1,7 +1,7 @@
 import express from 'express';
 import TelegramBot from 'node-telegram-bot-api';
 import { Low } from 'lowdb';
-import { JSONFile } from 'lowdb/node'; // ✅ this is the correct way
+import { JSONFile } from 'lowdb/adapters/JSONFile.js';
 
 import dotenv from 'dotenv';
 dotenv.config();
