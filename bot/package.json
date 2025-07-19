@@ -1,17 +1,20 @@
 {
   "name": "celestial-spin-bot",
   "version": "1.0.0",
+  "description": "Celestial Spin Telegram bot backend",
   "type": "module",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
-    "dotenv": "^16.4.5",
-    "lowdb": "^6.0.1",
+    "lowdb": "^3.0.0",
     "node-telegram-bot-api": "^0.61.0"
   },
-  "devDependencies": {
-    "@flydotio/dockerfile": "^0.7.10"
-  }
+  "engines": {
+    "node": ">=18"
+  },
+  "author": "Dmitrii Dubkov",
+  "license": "MIT"
 }
+
