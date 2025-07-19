@@ -1,7 +1,7 @@
 import express from 'express';
 import TelegramBot from 'node-telegram-bot-api';
 import { Low } from 'lowdb';
-import { JSONFile } from 'lowdb/node'; // ✅ official path in v3+
+import { JSONFile } from 'lowdb/node.js'; // ✅ Use .js extension — required for ESM
 
 import dotenv from 'dotenv';
 dotenv.config();
@@ -58,7 +58,6 @@ bot.onText(/\/spin/, async (msg) => {
   bot.sendMessage(chatId, `🌀 You earned ${earned} EARTH tokens!`);
 });
 
-// HTTP server to keep Render service alive
 app.get('/', (req, res) => {
   res.send('Celestial Spin Bot is alive!');
 });
