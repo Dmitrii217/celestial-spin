@@ -1,41 +1,43 @@
 import TelegramBot from 'node-telegram-bot-api';
-import express from 'express';
+import http from 'http';
 
-// Your Telegram bot token must be set in environment variables
+// Read bot token from env variables
 const BOT_TOKEN = process.env.BOT_TOKEN;
 if (!BOT_TOKEN) {
-  console.error('Error: BOT_TOKEN environment variable is not set.');
+  console.error('Error: BOT_TOKEN environment variable is missing!');
   process.exit(1);
 }
 
-// Create Telegram bot instance with polling
+// Create Telegram bot in polling mode
 const bot = new TelegramBot(BOT_TOKEN, { polling: true });
 
-// Example: /start command handler
+console.log('Starting Celestial Spin Bot...');
+
+// Handle /start command
 bot.onText(/\/start/, (msg) => {
-  bot.sendMessage(msg.chat.id, 
-    `🌌 Welcome to Celestial Spin!\nUse /spin to earn EARTH tokens every 4 hours.`
+  const chatId = msg.chat.id;
+  bot.sendMessage(chatId, 
+    `🌌 Welcome to Celestial Spin!\n\n` +
+    `Earn EARTH tokens every 4 hours by spinning the cosmic wheel.\n\n` +
+    `Track your token balance, next spin time, and milestones on the live dashboard.\n\n` +
+    `Use /spin to start spinning!`
   );
 });
 
-// Example: /spin command handler (simplified)
+// Example: Handle /spin command (replace with your real logic)
 bot.onText(/\/spin/, (msg) => {
-  // You can implement your cooldown and token logic here
-  bot.sendMessage(msg.chat.id, `You spun the wheel! (This is a placeholder response)`);
+  const chatId = msg.chat.id;
+  // TODO: Add your spin logic and cooldown checks here
+  bot.sendMessage(chatId, 'Spinning the cosmic wheel... (logic to be implemented)');
 });
 
-// Set up Express web server
-const app = express();
+// Start minimal HTTP server so Render knows app is alive
+const PORT = process.env.PORT || 10000;
 
-app.get('/', (req, res) => {
-  res.send('Celestial Spin Bot backend is running.');
-});
-
-// Use the PORT environment variable Render provides or fallback to 3000
-const PORT = process.env.PORT || 3000;
-
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Express server listening on port ${PORT}`);
-  console.log('Telegram bot polling started.');
+http.createServer((req, res) => {
+  res.writeHead(200, { 'Content-Type': 'text/plain' });
+  res.end('Celestial Spin Bot is running\n');
+}).listen(PORT, '0.0.0.0', () => {
+  console.log(`HTTP server listening on port ${PORT}`);
 });
 
