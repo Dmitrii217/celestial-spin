@@ -12,40 +12,56 @@ const PORT = process.env.PORT || 10000;
 const adapter = new JSONFile('db.json');
 const db = new Low(adapter);
 
+// Async IIFE to initialize bot and DB
 (async () => {
   await db.read();
   db.data ||= { users: {} };
 
-  // Setup Telegram Bot
   const bot = new TelegramBot(process.env.BOT_TOKEN, { polling: true });
 
   console.log('✅ BOT_TOKEN loaded:', !!process.env.BOT_TOKEN);
   console.log('🤖 Bot is running and polling Telegram...');
 
+  // 🌟 Helper: Send persistent keyboard with dashboard link
+  const sendDashboardKeyboard = (chatId) => {
+    const dashboardUrl = `https://celestial-dashboard.netlify.app/?tgId=${chatId}`;
+    bot.sendMessage(chatId, `📊 Tap the button below to open your live dashboard`, {
+      reply_markup: {
+        keyboard: [
+          [
+            {
+              text: '📊 View Dashboard',
+              web_app: { url: dashboardUrl }
+            }
+          ]
+        ],
+        resize_keyboard: true,
+        one_time_keyboard: false
+      }
+    });
+  };
+
+  // ✅ /start command
   bot.onText(/\/start/, async (msg) => {
     const chatId = msg.chat.id;
+    const firstName = msg.from.first_name || 'Explorer';
+
     if (!db.data.users[chatId]) {
       db.data.users[chatId] = { tokens: 0, lastSpin: 0 };
       await db.write();
     }
 
-    const dashboardUrl = `https://celestial-dashboard.netlify.app/?id=${chatId}`;
+    await bot.sendMessage(chatId, `🌌 Welcome to Celestial Spin, ${firstName}!
 
-    bot.sendMessage(chatId, `🌌 Welcome to Celestial Spin!
+Earn EARTH tokens every 4 hours by spinning the cosmic wheel.  
+Use /spin to start spinning!
 
-Earn EARTH tokens every 4 hours by spinning the cosmic wheel.
-
-Track your token balance, next spin time, and milestones on the live dashboard.
-
-Use /spin to start spinning!`, {
-      reply_markup: {
-        inline_keyboard: [[
-          { text: '📊 View Dashboard', url: dashboardUrl }
-        ]]
-      }
-    });
+Track your tokens, cooldown, and milestones on the live dashboard.`);
+    
+    sendDashboardKeyboard(chatId);
   });
 
+  // ✅ /spin command
   bot.onText(/\/spin/, async (msg) => {
     const chatId = msg.chat.id;
     let user = db.data.users[chatId];
@@ -57,7 +73,7 @@ Use /spin to start spinning!`, {
     }
 
     const now = Date.now();
-    const cooldown = 4 * 60 * 60 * 1000; // 4 hours cooldown
+    const cooldown = 4 * 60 * 60 * 1000; // 4 hours in ms
 
     if (now - user.lastSpin < cooldown) {
       const minutesLeft = Math.ceil((cooldown - (now - user.lastSpin)) / 60000);
@@ -65,25 +81,21 @@ Use /spin to start spinning!`, {
       return;
     }
 
-    const earned = Math.floor(Math.random() * 901 + 100); // random between 100-1000 tokens
+    const earned = Math.floor(Math.random() * 901 + 100); // 100–1000
     user.tokens += earned;
     user.lastSpin = now;
     await db.write();
 
-    const dashboardUrl = `https://celestial-dashboard.netlify.app/?id=${chatId}`;
-
-    bot.sendMessage(chatId, `🌀 You earned ${earned} EARTH tokens!`, {
-      reply_markup: {
-        inline_keyboard: [[
-          { text: '📊 View Dashboard', url: dashboardUrl }
-        ]]
-      }
+    await bot.sendMessage(chatId, `🎉 You spun the cosmic wheel and earned *${earned}* EARTH tokens!`, {
+      parse_mode: 'Markdown'
     });
+
+    sendDashboardKeyboard(chatId);
   });
 
-  // Simple HTTP server to keep alive or add API endpoints
+  // ✅ Keep-alive endpoint for Render
   app.get('/', (req, res) => {
-    res.send('Celestial Spin Bot is alive!');
+    res.send('🌍 Celestial Spin Bot is alive and spinning!');
   });
 
   app.listen(PORT, '0.0.0.0', () => {
