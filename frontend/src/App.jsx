@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
 import TokenDisplay from './components/TokenDisplay'
 import Milestones from './components/Milestones'
 import { fetchBalance } from './api'
@@ -24,10 +23,11 @@ const milestones = [
 ]
 
 function App() {
-  const [searchParams] = useSearchParams()
-  const userId = searchParams.get('tgId') || '806916617' // fallback to default ID
-
   const [balance, setBalance] = useState(0)
+
+  // ✅ Get tgId from the URL
+  const urlParams = new URLSearchParams(window.location.search)
+  const userId = urlParams.get('tgId') || '806916617'
 
   useEffect(() => {
     async function getData() {
@@ -38,9 +38,9 @@ function App() {
         console.error('Error fetching balance:', error)
       }
     }
-    getData()
 
-    const interval = setInterval(getData, 30000) // refresh every 30 sec
+    getData()
+    const interval = setInterval(getData, 30000)
     return () => clearInterval(interval)
   }, [userId])
 
@@ -57,3 +57,5 @@ function App() {
 }
 
 export default App
+
+
