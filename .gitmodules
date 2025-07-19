@@ -1,0 +1,3 @@
+[submodule "celestial-spin"]
+	path = celestial-spin
+	url = https://github.com/Dmitrii217/celestial-spin.git
