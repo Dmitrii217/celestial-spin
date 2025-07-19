@@ -8,11 +8,10 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 10000;
 
-// Setup LowDB with JSONFile adapter
+// Setup LowDB
 const adapter = new JSONFile('db.json');
 const db = new Low(adapter);
 
-// Async IIFE to initialize bot and DB
 (async () => {
   await db.read();
   db.data ||= { users: {} };
@@ -22,7 +21,7 @@ const db = new Low(adapter);
   console.log('✅ BOT_TOKEN loaded:', !!process.env.BOT_TOKEN);
   console.log('🤖 Bot is running and polling Telegram...');
 
-  // 🌟 Helper: Send persistent keyboard with dashboard link
+  // 🔁 Reusable persistent dashboard button
   const sendDashboardKeyboard = (chatId) => {
     const dashboardUrl = `https://celestial-dashboard.netlify.app/?tgId=${chatId}`;
     bot.sendMessage(chatId, `📊 Tap the button below to open your live dashboard`, {
@@ -57,7 +56,7 @@ Earn EARTH tokens every 4 hours by spinning the cosmic wheel.
 Use /spin to start spinning!
 
 Track your tokens, cooldown, and milestones on the live dashboard.`);
-    
+
     sendDashboardKeyboard(chatId);
   });
 
@@ -73,20 +72,52 @@ Track your tokens, cooldown, and milestones on the live dashboard.`);
     }
 
     const now = Date.now();
-    const cooldown = 4 * 60 * 60 * 1000; // 4 hours in ms
+    const cooldown = 4 * 60 * 60 * 1000;
 
     if (now - user.lastSpin < cooldown) {
       const minutesLeft = Math.ceil((cooldown - (now - user.lastSpin)) / 60000);
-      bot.sendMessage(chatId, `⏳ You can spin again in ${minutesLeft} minutes.`);
+      await bot.sendMessage(chatId, `⏳ You can spin again in ${minutesLeft} minutes.`);
       return;
     }
 
-    const earned = Math.floor(Math.random() * 901 + 100); // 100–1000
+    const earned = Math.floor(Math.random() * 901 + 100); // 100–1000 tokens
     user.tokens += earned;
     user.lastSpin = now;
     await db.write();
 
     await bot.sendMessage(chatId, `🎉 You spun the cosmic wheel and earned *${earned}* EARTH tokens!`, {
+      parse_mode: 'Markdown'
+    });
+
+    sendDashboardKeyboard(chatId);
+  });
+
+  // ✅ /balance command
+  bot.onText(/\/balance/, async (msg) => {
+    const chatId = msg.chat.id;
+    let user = db.data.users[chatId];
+
+    if (!user) {
+      db.data.users[chatId] = { tokens: 0, lastSpin: 0 };
+      user = db.data.users[chatId];
+      await db.write();
+    }
+
+    const now = Date.now();
+    const cooldown = 4 * 60 * 60 * 1000;
+    const timeLeft = user.lastSpin + cooldown - now;
+
+    let cooldownText = '';
+    if (timeLeft > 0) {
+      const minutes = Math.floor((timeLeft / 1000 / 60) % 60);
+      const hours = Math.floor(timeLeft / 1000 / 60 / 60);
+      cooldownText = `🕒 Next spin in: ${hours}h ${minutes}m`;
+    } else {
+      cooldownText = `✅ You can spin now! Use /spin`;
+    }
+
+    await bot.sendMessage(chatId, `🌍 Your EARTH token balance: *${user.tokens}*  
+${cooldownText}`, {
       parse_mode: 'Markdown'
     });
 
