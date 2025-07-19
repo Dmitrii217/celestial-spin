@@ -1,68 +1,76 @@
 import express from 'express';
 import TelegramBot from 'node-telegram-bot-api';
-import { Low } from 'lowdb';
-import { JSONFile } from 'lowdb/node.js'; // ✅ Use .js extension — required for ESM
-
+import { Low, JSONFile } from 'lowdb';
 import dotenv from 'dotenv';
+
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 10000;
 
-// Setup DB
+// Setup LowDB with JSONFile adapter
 const adapter = new JSONFile('db.json');
 const db = new Low(adapter);
-await db.read();
-db.data ||= { users: {} };
 
-// Setup Telegram Bot
-const bot = new TelegramBot(process.env.BOT_TOKEN, { polling: true });
+(async () => {
+  await db.read();
+  db.data ||= { users: {} };
 
-console.log('✅ BOT_TOKEN loaded:', !!process.env.BOT_TOKEN);
-console.log('🤖 Bot is running and polling Telegram...');
+  // Setup Telegram Bot
+  const bot = new TelegramBot(process.env.BOT_TOKEN, { polling: true });
 
-bot.onText(/\/start/, async (msg) => {
-  const chatId = msg.chat.id;
-  if (!db.data.users[chatId]) {
-    db.data.users[chatId] = { tokens: 0, lastSpin: 0 };
-    await db.write();
-  }
+  console.log('✅ BOT_TOKEN loaded:', !!process.env.BOT_TOKEN);
+  console.log('🤖 Bot is running and polling Telegram...');
 
-  bot.sendMessage(chatId, `🌌 Welcome to Celestial Spin!
+  bot.onText(/\/start/, async (msg) => {
+    const chatId = msg.chat.id;
+    if (!db.data.users[chatId]) {
+      db.data.users[chatId] = { tokens: 0, lastSpin: 0 };
+      await db.write();
+    }
+
+    bot.sendMessage(chatId, `🌌 Welcome to Celestial Spin!
 
 Earn EARTH tokens every 4 hours by spinning the cosmic wheel.
 
 Track your token balance, next spin time, and milestones on the live dashboard.
 
 Use /spin to start spinning!`);
-});
+  });
 
-bot.onText(/\/spin/, async (msg) => {
-  const chatId = msg.chat.id;
-  const user = db.data.users[chatId];
+  bot.onText(/\/spin/, async (msg) => {
+    const chatId = msg.chat.id;
+    const user = db.data.users[chatId];
 
-  const now = Date.now();
-  const cooldown = 4 * 60 * 60 * 1000;
+    if (!user) {
+      db.data.users[chatId] = { tokens: 0, lastSpin: 0 };
+      await db.write();
+    }
 
-  if (now - user.lastSpin < cooldown) {
-    const minutesLeft = Math.ceil((cooldown - (now - user.lastSpin)) / 60000);
-    bot.sendMessage(chatId, `⏳ You can spin again in ${minutesLeft} minutes.`);
-    return;
-  }
+    const now = Date.now();
+    const cooldown = 4 * 60 * 60 * 1000; // 4 hours cooldown
 
-  const earned = Math.floor(Math.random() * 901 + 100);
-  user.tokens += earned;
-  user.lastSpin = now;
-  await db.write();
+    if (now - user.lastSpin < cooldown) {
+      const minutesLeft = Math.ceil((cooldown - (now - user.lastSpin)) / 60000);
+      bot.sendMessage(chatId, `⏳ You can spin again in ${minutesLeft} minutes.`);
+      return;
+    }
 
-  bot.sendMessage(chatId, `🌀 You earned ${earned} EARTH tokens!`);
-});
+    const earned = Math.floor(Math.random() * 901 + 100); // random between 100-1000 tokens
+    user.tokens += earned;
+    user.lastSpin = now;
+    await db.write();
 
-app.get('/', (req, res) => {
-  res.send('Celestial Spin Bot is alive!');
-});
+    bot.sendMessage(chatId, `🌀 You earned ${earned} EARTH tokens!`);
+  });
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🌐 HTTP server listening on port ${PORT}`);
-});
+  // Simple HTTP server to keep alive or add API endpoints
+  app.get('/', (req, res) => {
+    res.send('Celestial Spin Bot is alive!');
+  });
+
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`🌐 HTTP server listening on port ${PORT}`);
+  });
+})();
 
