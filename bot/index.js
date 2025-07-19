@@ -1,119 +1,91 @@
 import TelegramBot from 'node-telegram-bot-api';
+import express from 'express';
 import { Low } from 'lowdb';
 import { JSONFile } from 'lowdb/node';
-import path from 'path';
 import { fileURLToPath } from 'url';
-
-// Setup __dirname for ES modules
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-// Load environment variables from .env if needed
+import { dirname, join } from 'path';
 import dotenv from 'dotenv';
+
 dotenv.config();
 
-const BOT_TOKEN = process.env.BOT_TOKEN;
-if (!BOT_TOKEN) {
-  console.error('Error: BOT_TOKEN is not defined in environment variables.');
-  process.exit(1);
-}
-
-// Setup lowdb to use JSON file in bot folder
-const file = path.join(__dirname, 'db.json');
-const adapter = new JSONFile(file);
+// Setup DB
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const dbFile = join(__dirname, 'db.json');
+const adapter = new JSONFile(dbFile);
 const db = new Low(adapter);
-
 await db.read();
 db.data ||= { users: {} };
+await db.write();
 
-// Helper functions
-function getUser(userId) {
-  if (!db.data.users[userId]) {
-    db.data.users[userId] = {
-      balance: 0,
-      lastSpin: 0
-    };
-  }
-  return db.data.users[userId];
-}
+// Bot setup
+const token = process.env.BOT_TOKEN;
+const bot = new TelegramBot(token, { polling: true });
 
-function saveDB() {
-  return db.write();
-}
+// Cooldown time: 4 hours
+const COOLDOWN_MS = 4 * 60 * 60 * 1000;
 
-// Spin cooldown and token earning constants
-const SPIN_COOLDOWN_MS = 4 * 60 * 60 * 1000; // 4 hours
+// Web dashboard URL
+const DASHBOARD_URL = 'https://celestialspingood.netlify.app';
 
-function canSpin(user) {
-  const now = Date.now();
-  return now - user.lastSpin >= SPIN_COOLDOWN_MS;
-}
+// Express server to keep Render service alive
+const app = express();
+const PORT = process.env.PORT || 10000;
+app.get('/', (req, res) => res.send('Celestial Spin Bot is live'));
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`HTTP server listening on port ${PORT}`);
+});
 
-function timeLeft(user) {
-  const now = Date.now();
-  const diff = SPIN_COOLDOWN_MS - (now - user.lastSpin);
-  return diff > 0 ? diff : 0;
-}
-
-function msToTime(ms) {
-  let seconds = Math.floor(ms / 1000);
-  let hours = Math.floor(seconds / 3600);
-  seconds %= 3600;
-  let minutes = Math.floor(seconds / 60);
-  seconds %= 60;
-  return `${hours}h ${minutes}m ${seconds}s`;
-}
-
-function earnTokens() {
-  // Random between 100 and 1000 tokens
-  return Math.floor(Math.random() * 901) + 100;
-}
-
-// Initialize Telegram bot with polling
-const bot = new TelegramBot(BOT_TOKEN, { polling: true });
-
-console.log('✅ Bot is running and polling Telegram...');
-
-// Command handlers
+console.log('✅ Loading BOT_TOKEN:', !!token);
+console.log('🤖 Bot is running and polling Telegram...');
 
 bot.onText(/\/start/, async (msg) => {
   const chatId = msg.chat.id;
+  const firstName = msg.from.first_name || 'Explorer';
   await db.read();
-  getUser(chatId); // initialize user if not exists
-  await saveDB();
 
-  bot.sendMessage(chatId, 
-    `🌌 Welcome to Celestial Spin!\n\n` +
-    `Earn EARTH tokens every 4 hours by spinning the cosmic wheel.\n\n` +
-    `Track your token balance, next spin time, and milestones on the live dashboard.\n\n` +
-    `Use /spin to start spinning!`
-  );
+  if (!db.data.users[chatId]) {
+    db.data.users[chatId] = { balance: 0, lastSpin: 0 };
+    await db.write();
+  }
+
+  bot.sendMessage(chatId, `🌌 Welcome to Celestial Spin!
+
+Earn EARTH tokens every 4 hours by spinning the cosmic wheel.
+
+Track your token balance, next spin time, and milestones on the live dashboard:
+${DASHBOARD_URL}
+
+Use /spin to start spinning!`);
+});
+
+bot.onText(/\/spin/, async (msg) => {
+  const chatId = msg.chat.id;
+  const now = Date.now();
+  await db.read();
+
+  const user = db.data.users[chatId] ||= { balance: 0, lastSpin: 0 };
+  const nextSpin = user.lastSpin + COOLDOWN_MS;
+
+  if (now < nextSpin) {
+    const msLeft = nextSpin - now;
+    const minsLeft = Math.ceil(msLeft / 60000);
+    return bot.sendMessage(chatId, `⏳ You can spin again in ${minsLeft} minutes.`);
+  }
+
+  const reward = Math.floor(Math.random() * 901) + 100; // 100–1000
+  user.balance += reward;
+  user.lastSpin = now;
+  await db.write();
+
+  bot.sendMessage(chatId, `🔁 You spun the cosmic wheel and earned ${reward} EARTH tokens! 🌍
+
+Check your balance and progress: ${DASHBOARD_URL}`);
 });
 
 bot.onText(/\/balance/, async (msg) => {
   const chatId = msg.chat.id;
   await db.read();
-  const user = getUser(chatId);
-  bot.sendMessage(chatId, `🌍 Your EARTH token balance is: ${user.balance} tokens.`);
+  const user = db.data.users[chatId] ||= { balance: 0, lastSpin: 0 };
+  bot.sendMessage(chatId, `🌍 Your current balance: ${user.balance} EARTH tokens.`);
 });
-
-bot.onText(/\/spin/, async (msg) => {
-  const chatId = msg.chat.id;
-  await db.read();
-  const user = getUser(chatId);
-
-  if (!canSpin(user)) {
-    const left = timeLeft(user);
-    bot.sendMessage(chatId, `⏳ You are on cooldown!\nNext spin available in ${msToTime(left)}.`);
-    return;
-  }
-
-  // User can spin
-  const earned = earnTokens();
-  user.balance += earned;
-  user.lastSpin = Date.now();
-
-  await saveDB();
-
-  bot.sendMessage(chatId, `🎉 You spun the cosmic whe
 
