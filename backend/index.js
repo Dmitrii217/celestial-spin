@@ -16,7 +16,10 @@ const adapter = new JSONFile(dbFile);
 const db = new Low(adapter);
 
 const app = express();
-const PORT = process.env.PORT || 4000;
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, () => {
+  console.log(`✅ Backend server started on port ${PORT}`);
+});
 
 app.use(cors());
 app.use(express.json());
