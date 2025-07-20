@@ -1,35 +1,99 @@
-import express from 'express'
-import cors from 'cors'
-import dotenv from 'dotenv'
-import { init, getBalanceForUser, getNextSpinTimeForUser, addTokensForUser } from './services/dataService.js'
+import express from 'express';
+import cors from 'cors';
+import dotenv from 'dotenv';
+import { Low } from 'lowdb';
+import { JSONFile } from 'lowdb/node';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-dotenv.config()
+dotenv.config();
 
-const app = express()
-const PORT = process.env.PORT || 4000
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const dbFile = path.join(__dirname, 'db.json');
 
-app.use(cors())
-app.use(express.json())
+const adapter = new JSONFile(dbFile);
+const db = new Low(adapter);
 
-// Initialize database with defaults if missing
-await init()
+const app = express();
+const PORT = process.env.PORT || 4000;
 
-// API endpoint to get balance and cooldown for user
+app.use(cors());
+app.use(express.json());
+
+// Initialize DB
+async function init() {
+  await db.read();
+  if (!db.data) {
+    db.data = { users: {} };
+    await db.write();
+  }
+}
+await init();
+
+// GET balance and cooldown for user
 app.get('/api/balance/:userId', async (req, res) => {
-  const userId = req.params.userId
-  const balance = await getBalanceForUser(userId)
-  const nextSpin = await getNextSpinTimeForUser(userId)
-  const cooldown = Math.max(Math.floor((nextSpin - Date.now()) / 1000), 0)
+  const userId = req.params.userId;
+  await db.read();
 
-  res.json({ userId, balance, cooldown })
-})
+  const user = db.data.users[userId] || { balance: 0, lastSpinTimestamp: 0 };
+
+  const now = Date.now();
+  const cooldownTime = 4 * 60 * 60 * 1000; // 4 hours
+  const nextSpin = user.lastSpinTimestamp + cooldownTime;
+  const cooldown = Math.max(Math.floor((nextSpin - now) / 1000), 0);
+
+  res.json({
+    userId,
+    balance: user.balance,
+    cooldown,
+  });
+});
+
+// POST spin: add tokens for user and update lastSpinTimestamp
+app.post('/api/spin', async (req, res) => {
+  try {
+    const { userId, tokens } = req.body;
+
+    if (!userId || typeof tokens !== 'number') {
+      return res.status(400).json({ error: 'Invalid userId or tokens' });
+    }
+
+    await db.read();
+
+    if (!db.data.users[userId]) {
+      db.data.users[userId] = { balance: 0, lastSpinTimestamp: 0 };
+    }
+
+    const now = Date.now();
+    const cooldown = 4 * 60 * 60 * 1000; // 4 hours cooldown
+
+    if (now - db.data.users[userId].lastSpinTimestamp < cooldown) {
+      return res.status(429).json({ error: 'Cooldown active. Spin not allowed.' });
+    }
+
+    db.data.users[userId].balance += tokens;
+    db.data.users[userId].lastSpinTimestamp = now;
+
+    await db.write();
+
+    res.json({
+      userId,
+      balance: db.data.users[userId].balance,
+      lastSpinTimestamp: db.data.users[userId].lastSpinTimestamp,
+    });
+  } catch (error) {
+    console.error('Error processing spin:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
 
 // Health check
-app.get('/', (req, res) => {
-  res.send('🌍 Celestial Spin backend is running')
-})
+app.get('/', (_, res) => {
+  res.send('🌍 Celestial Spin backend is running');
+});
 
 app.listen(PORT, () => {
-  console.log(`✅ Backend server started on port ${PORT}`)
-})
+  console.log(`✅ Backend server started on port ${PORT}`);
+});
 
