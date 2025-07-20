@@ -1,37 +1,45 @@
-kimport { Low } from 'lowdb'
-import { JSONFile } from 'lowdb/node'   // Note: import JSONFile adapter for Node.js
+import { Low } from 'lowdb'
+import { JSONFile } from 'lowdb/node'
 import path from 'path'
 import { fileURLToPath } from 'url'
 
-// Resolve __dirname for ES modules
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
+const dbFile = path.join(__dirname, '../../db.json')
 
-// Path to your shared db.json (adjust if needed)
-const file = path.join(__dirname, '../../db.json')
-
-// Create adapter and Low instance
-const adapter = new JSONFile(file)
+const adapter = new JSONFile(dbFile)
 const db = new Low(adapter)
 
-// Initialize database with default structure
+const defaultData = {
+  users: {}
+}
+
 export async function init() {
   await db.read()
   if (!db.data) {
-    db.data = { users: {} }
+    db.data = defaultData
     await db.write()
   }
 }
 
-// Get token balance for a user
 export async function getBalanceForUser(userId) {
   await db.read()
   return db.data.users?.[userId]?.balance || 0
 }
 
-// Get next spin time for a user
+// This function returns the timestamp of the user's last spin
 export async function getNextSpinTimeForUser(userId) {
   await db.read()
-  return db.data.users?.[userId]?.nextSpinTime || 0
+  return db.data.users?.[userId]?.lastSpin || 0
+}
+
+export async function addTokensForUser(userId, tokensToAdd) {
+  await db.read()
+  if (!db.data.users[userId]) {
+    db.data.users[userId] = { balance: 0, lastSpin: 0 }
+  }
+  db.data.users[userId].balance += tokensToAdd
+  db.data.users[userId].lastSpin = Date.now()
+  await db.write()
 }
 

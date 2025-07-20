@@ -1,17 +1,35 @@
-import express from 'express';
-import { init, getBalanceForUser, getNextSpinTimeForUser, addTokensForUser } from './services/dataService.js';
-import dotenv from 'dotenv';
+import express from 'express'
+import cors from 'cors'
+import dotenv from 'dotenv'
+import { init, getBalanceForUser, getNextSpinTimeForUser } from './services/dataService.js'
 
-dotenv.config();
+dotenv.config()
 
-const app = express();
-app.use(express.json());
+const app = express()
+const PORT = process.env.PORT || 4000
 
-await init(); // Initialize DB
+app.use(cors())
+app.use(express.json())
 
-// Your API routes here...
+// ✅ Initialize LowDB with default data if missing
+await init()
 
-app.listen(process.env.PORT || 3000, () => {
-  console.log('Backend server started');
-});
+// ✅ GET /api/balance/:userId
+app.get('/api/balance/:userId', async (req, res) => {
+  const userId = req.params.userId
+  const balance = await getBalanceForUser(userId)
+  const nextSpin = await getNextSpinTimeForUser(userId)
+  const cooldown = Math.max(Math.floor((nextSpin - Date.now()) / 1000), 0)
+
+  res.json({ userId, balance, cooldown })
+})
+
+// ✅ Health check endpoint
+app.get('/', (req, res) => {
+  res.send('🌍 Celestial Spin backend is running')
+})
+
+app.listen(PORT, () => {
+  console.log(`✅ Backend server started on port ${PORT}`)
+})
 
