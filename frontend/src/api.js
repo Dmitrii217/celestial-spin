@@ -5,5 +5,4 @@ export async function fetchBalance(userId) {
   if (!res.ok) throw new Error('Failed to fetch balance');
   return res.json(); // returns { userId, balance, cooldown }
 }
-}
 
