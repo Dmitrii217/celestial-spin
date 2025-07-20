@@ -1,4 +1,4 @@
-const API_BASE = 'https://celestial-spin-backend.onrender.com/api';
+const API_BASE = 'https://celestial-spin.onrender.com/api';
 
 export async function fetchBalance(userId) {
   const res = await fetch(`${API_BASE}/balance/${userId}`);
