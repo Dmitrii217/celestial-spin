@@ -1,45 +1,50 @@
-import { Low } from 'lowdb'
-import { JSONFile } from 'lowdb/node'
-import path from 'path'
-import { fileURLToPath } from 'url'
-
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = path.dirname(__filename)
-const dbFile = path.join(__dirname, '../../db.json')
-
-const adapter = new JSONFile(dbFile)
-const db = new Low(adapter)
-
-const defaultData = {
-  users: {}
-}
-
-export async function init() {
-  await db.read()
-  if (!db.data) {
-    db.data = defaultData
-    await db.write()
-  }
-}
+// backend/services/dataService.js
+import { supabase } from './supabaseClient.js';
 
 export async function getBalanceForUser(userId) {
-  await db.read()
-  return db.data.users?.[userId]?.balance || 0
+  const { data, error } = await supabase
+    .from('users')
+    .select('balance')
+    .eq('userId', userId)
+    .single();
+
+  if (error || !data) return 0;
+  return data.balance;
 }
 
-// This function returns the timestamp of the user's last spin
-export async function getNextSpinTimeForUser(userId) {
-  await db.read()
-  return db.data.users?.[userId]?.lastSpin || 0
+export async function getCooldownForUser(userId) {
+  const { data, error } = await supabase
+    .from('users')
+    .select('nextSpin')
+    .eq('userId', userId)
+    .single();
+
+  if (error || !data) return 0;
+  return new Date(data.nextSpin).getTime();
 }
 
-export async function addTokensForUser(userId, tokensToAdd) {
-  await db.read()
-  if (!db.data.users[userId]) {
-    db.data.users[userId] = { balance: 0, lastSpin: 0 }
+export async function recordSpinForUser(userId, tokensEarned, nextSpinTime) {
+  const { data: existing, error } = await supabase
+    .from('users')
+    .select('*')
+    .eq('userId', userId)
+    .single();
+
+  if (existing) {
+    await supabase
+      .from('users')
+      .update({
+        balance: existing.balance + tokensEarned,
+        nextSpin: new Date(nextSpinTime).toISOString(),
+      })
+      .eq('userId', userId);
+  } else {
+    await supabase.from('users').insert([
+      {
+        userId,
+        balance: tokensEarned,
+        nextSpin: new Date(nextSpinTime).toISOString(),
+      },
+    ]);
   }
-  db.data.users[userId].balance += tokensToAdd
-  db.data.users[userId].lastSpin = Date.now()
-  await db.write()
 }
-
