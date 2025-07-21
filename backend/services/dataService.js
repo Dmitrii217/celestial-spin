@@ -27,19 +27,19 @@ export async function getBalanceForUser(userId) {
   return db.data.users?.[userId]?.balance || 0
 }
 
+// This function returns the timestamp of the user's last spin
 export async function getNextSpinTimeForUser(userId) {
   await db.read()
-  const lastSpin = db.data.users?.[userId]?.lastSpinTimestamp || 0
-  return lastSpin + 4 * 60 * 60 * 1000 // 4 hours after last spin
+  return db.data.users?.[userId]?.lastSpin || 0
 }
 
 export async function addTokensForUser(userId, tokensToAdd) {
   await db.read()
   if (!db.data.users[userId]) {
-    db.data.users[userId] = { balance: 0, lastSpinTimestamp: 0 }
+    db.data.users[userId] = { balance: 0, lastSpin: 0 }
   }
   db.data.users[userId].balance += tokensToAdd
-  db.data.users[userId].lastSpinTimestamp = Date.now()
+  db.data.users[userId].lastSpin = Date.now()
   await db.write()
 }
 
