@@ -1,7 +1,8 @@
+// backend/index.js
 import express from 'express'
 import cors from 'cors'
 import dotenv from 'dotenv'
-import { init, getBalanceForUser, getNextSpinTimeForUser } from './services/dataService.js'
+import { init, getBalanceForUser, getNextSpinTimeForUser, recordSpinForUser } from './services/dataService.js'
 
 dotenv.config()
 
@@ -11,20 +12,38 @@ const PORT = process.env.PORT || 4000
 app.use(cors())
 app.use(express.json())
 
-// ✅ Initialize LowDB with default data if missing
+// Initialize database (Supabase or lowdb)
 await init()
 
-// ✅ GET /api/balance/:userId
+// GET user balance & cooldown in minutes
 app.get('/api/balance/:userId', async (req, res) => {
   const userId = req.params.userId
   const balance = await getBalanceForUser(userId)
   const nextSpin = await getNextSpinTimeForUser(userId)
-  const cooldown = Math.max(Math.floor((nextSpin - Date.now()) / 1000), 0)
 
-  res.json({ userId, balance, cooldown })
+  let cooldownMinutes = 0
+  if (nextSpin && nextSpin > Date.now()) {
+    cooldownMinutes = Math.ceil((nextSpin - Date.now()) / 60000) // milliseconds to minutes rounded up
+  }
+
+  res.json({ userId, balance, cooldown: cooldownMinutes })
 })
 
-// ✅ Health check endpoint
+// POST spin endpoint
+app.post('/api/spin', async (req, res) => {
+  try {
+    const { userId } = req.body
+    if (!userId) return res.status(400).json({ error: 'Missing userId in request body' })
+
+    const spinResult = await recordSpinForUser(userId)
+    res.json(spinResult)
+  } catch (error) {
+    console.error('Spin failed:', error)
+    res.status(500).json({ error: 'Spin failed on backend' })
+  }
+})
+
+// Health check
 app.get('/', (req, res) => {
   res.send('🌍 Celestial Spin backend is running')
 })
@@ -32,4 +51,3 @@ app.get('/', (req, res) => {
 app.listen(PORT, () => {
   console.log(`✅ Backend server started on port ${PORT}`)
 })
-
