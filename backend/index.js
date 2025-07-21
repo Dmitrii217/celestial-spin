@@ -1,19 +1,9 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import { Low } from 'lowdb';
-import { JSONFile } from 'lowdb/node';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import { supabase } from './services/supabaseClient.js';
 
 dotenv.config();
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const dbFile = path.join(__dirname, 'db.json');
-
-const adapter = new JSONFile(dbFile);
-const db = new Low(adapter);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -21,79 +11,109 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-// ✅ Initialize DB
-async function init() {
-  await db.read();
-  if (!db.data) {
-    db.data = { users: {} };
-    await db.write();
+// Ensure user exists
+async function ensureUser(userId) {
+  const { data, error } = await supabase
+    .from('users')
+    .select('*')
+    .eq('user_id', userId)
+    .single();
+
+  if (error && error.code !== 'PGRST116') {
+    throw error;
+  }
+
+  if (!data) {
+    const { error: insertError } = await supabase
+      .from('users')
+      .insert([{ user_id: userId, balance: 0, last_spin: 0 }]);
+
+    if (insertError) throw insertError;
   }
 }
-await init();
 
-// ✅ GET balance and cooldown
+// GET balance and cooldown
 app.get('/api/balance/:userId', async (req, res) => {
   const userId = req.params.userId;
-  await db.read();
 
-  const user = db.data.users[userId] || { balance: 0, lastSpinTimestamp: 0 };
-
-  const now = Date.now();
-  const cooldownMs = 4 * 60 * 60 * 1000;
-  const nextSpin = user.lastSpinTimestamp + cooldownMs;
-  const cooldown = Math.max(Math.floor((nextSpin - now) / 1000), 0);
-
-  res.json({
-    userId,
-    balance: user.balance,
-    cooldown,
-  });
-});
-
-// ✅ POST spin
-app.post('/api/spin', async (req, res) => {
   try {
-    const { userId, tokens } = req.body;
+    await ensureUser(userId);
 
-    if (!userId || typeof tokens !== 'number') {
-      return res.status(400).json({ error: 'Invalid userId or tokens' });
-    }
+    const { data, error } = await supabase
+      .from('users')
+      .select('balance, last_spin')
+      .eq('user_id', userId)
+      .single();
 
-    await db.read();
-
-    if (!db.data.users[userId]) {
-      db.data.users[userId] = { balance: 0, lastSpinTimestamp: 0 };
-    }
+    if (error) throw error;
 
     const now = Date.now();
-    const cooldown = 4 * 60 * 60 * 1000;
-
-    if (now - db.data.users[userId].lastSpinTimestamp < cooldown) {
-      return res.status(429).json({ error: 'Cooldown active. Spin not allowed.' });
-    }
-
-    db.data.users[userId].balance += tokens;
-    db.data.users[userId].lastSpinTimestamp = now;
-
-    await db.write();
+    const cooldownMs = 4 * 60 * 60 * 1000;
+    const nextSpin = data.last_spin + cooldownMs;
+    const cooldown = Math.max(Math.floor((nextSpin - now) / 1000), 0);
 
     res.json({
       userId,
-      balance: db.data.users[userId].balance,
-      lastSpinTimestamp: db.data.users[userId].lastSpinTimestamp,
+      balance: data.balance,
+      cooldown,
     });
-  } catch (error) {
-    console.error('Error processing spin:', error);
-    res.status(500).json({ error: 'Internal server error' });
+  } catch (err) {
+    console.error('Error in /balance:', err);
+    res.status(500).json({ error: 'Failed to fetch user data' });
   }
 });
 
-// ✅ Health check
-app.get('/', (_, res) => {
-  res.send('🌍 Celestial Spin backend is running');
+// POST spin
+app.post('/api/spin', async (req, res) => {
+  const { userId, tokens } = req.body;
+
+  if (!userId || typeof tokens !== 'number') {
+    return res.status(400).json({ error: 'Invalid userId or tokens' });
+  }
+
+  try {
+    await ensureUser(userId);
+
+    const { data: user, error } = await supabase
+      .from('users')
+      .select('balance, last_spin')
+      .eq('user_id', userId)
+      .single();
+
+    if (error) throw error;
+
+    const now = Date.now();
+    const cooldownMs = 4 * 60 * 60 * 1000;
+
+    if (now - user.last_spin < cooldownMs) {
+      return res.status(429).json({ error: 'Cooldown active. Spin not allowed.' });
+    }
+
+    const newBalance = user.balance + tokens;
+
+    const { error: updateError } = await supabase
+      .from('users')
+      .update({ balance: newBalance, last_spin: now })
+      .eq('user_id', userId);
+
+    if (updateError) throw updateError;
+
+    res.json({
+      userId,
+      balance: newBalance,
+      lastSpinTimestamp: now,
+    });
+  } catch (err) {
+    console.error('Error in /spin:', err);
+    res.status(500).json({ error: 'Spin failed on backend' });
+  }
 });
 
-// ✅ Start server
+// Health check
+app.get('/', (_, res) => {
+  res.send('🌍 Celestial Spin backend (Supabase) is running');
+});
+
 app.listen(PORT, () => {
   console.log(`✅ Backend server started on port ${PORT}`);
 });
